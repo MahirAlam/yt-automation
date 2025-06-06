@@ -32,7 +32,7 @@ services:
   #     com.docker.compose.service: "Baserow Database"
   #     com.docker.compose.description: "No-code database & Airtable alternative"
 
-  workflows: # MODIFIED SECTION
+  workflows:
     container_name: "workflows"
     hostname: workflows
     build:
@@ -40,13 +40,15 @@ services:
       dockerfile: n8n.Dockerfile # Name of your Dockerfile
     restart: unless-stopped
     environment:
-      LIBVA_DRIVER_NAME: iHD
+      # GPU support environment variables
+      LIBVA_DRIVER_NAME: ${GPU_DRIVER:-iHD}
       LIBVA_DRM: 1
       LIBVA_GLX: 1
       LIBVA_X11: 1
       LIBVA_VLD: 1
       LIBVA_TRACE: 1
       LIBVA_TRACE_FILE: /tmp/libva-trace.log
+      # Service config
       TZ: ${TZ}
       N8N_HOST: "localhost"
       N8N_PORT: 5678
@@ -62,6 +64,11 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ${N8N_FILES_PATH:-./n8n-files}:/files # This is crucial for script I/O
+      # Add GPU device mounts
+      - /dev/dri:/dev/dri # For Intel/AMD GPU support
+      - /dev/nvidia0:/dev/nvidia0 # For NVIDIA GPU support
+      - /dev/nvidiactl:/dev/nvidiactl # For NVIDIA GPU support
+      - /dev/nvidia-modeset:/dev/nvidia-modeset # For NVIDIA GPU support
     networks:
       - app-network
     healthcheck:
@@ -74,6 +81,12 @@ services:
       resources:
         limits:
           memory: ${N8N_MEMORY_LIMIT:-2G} # Increased memory for video processing
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, utility, compute, video]
+    runtime: ${GPU_RUNTIME:-runc} # Use nvidia for NVIDIA GPUs
     labels:
       com.docker.compose.service: "n8n Workflows"
       com.docker.compose.description: "Workflow automation tool"
@@ -128,8 +141,17 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-password123}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-nca-toolkit}
       S3_REGION: ${S3_REGION:-us-east-1}
+      # GPU environment variables
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-all}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
     ports:
       - "8080:8080"
+    volumes:
+      # Add GPU device mounts
+      - /dev/dri:/dev/dri # For Intel/AMD GPU support
+      - /dev/nvidia0:/dev/nvidia0 # For NVIDIA GPU support
+      - /dev/nvidiactl:/dev/nvidiactl # For NVIDIA GPU support
+      - /dev/nvidia-modeset:/dev/nvidia-modeset # For NVIDIA GPU support
     depends_on:
       minio:
         condition: service_healthy
@@ -145,6 +167,12 @@ services:
       resources:
         limits:
           memory: ${NCA_MEMORY_LIMIT:-2G}
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, utility, compute, video]
+    runtime: ${GPU_RUNTIME:-runc} # Use nvidia for NVIDIA GPUs
     labels:
       com.docker.compose.service: "NCA Toolkit"
       com.docker.compose.description: "No-Code Architects Toolkit"

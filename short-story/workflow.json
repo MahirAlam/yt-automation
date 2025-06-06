@@ -193,35 +193,6 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "52e75e46-d84f-4f11-9490-1170dba3cc20",
-              "name": "audio_path",
-              "value": "=/files/processed_audio/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
-              "type": "string"
-            },
-            {
-              "id": "214a34a9-4a3d-48fd-8bc5-df3bf5ad28cf",
-              "name": "output_path",
-              "value": "=/files/output_videos/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        976,
-        420
-      ],
-      "id": "29b5a90b-b4b7-447b-895f-c2570870c767",
-      "name": "Set Paths"
-    },
-    {
-      "parameters": {
         "command": "=python3 /opt/scripts/clip_cutter.py --audio-duration {{ $json.duration }} --smart-color"
       },
       "type": "n8n-nodes-base.executeCommand",
@@ -235,7 +206,7 @@
     },
     {
       "parameters": {
-        "command": "=ffmpeg -i {{ $json.stdout }} -i {{ $('Set Paths').item.json.audio_path }}_speedup.mp3 -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 -shortest \"{{ $('Set Paths').item.json.output_path }}.mp4\""
+        "command": "=ffmpeg -i {{ $json.stdout }} -i {{ $('Set Paths & watermark').item.json.audio_path }}_speedup.mp3 -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 -shortest \"{{ $('Set Paths & watermark').item.json.output_path }}.mp4\""
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -248,7 +219,7 @@
     },
     {
       "parameters": {
-        "fileSelector": "={{ $('Set Paths').item.json.output_path }}.mp4",
+        "fileSelector": "={{ $('Set Paths & watermark').item.json.output_path }}.mp4",
         "options": {}
       },
       "type": "n8n-nodes-base.readWriteFile",
@@ -297,7 +268,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n    \"video_url\": \"http://minio:9000/story/done/{{ $('Set Paths').item.json.output_path.split(\"/\").last() }}.mp4\",\n    \"settings\": {\n        \"style\": \"word_by_word\",\n        \"line_color\": \"#FFFFFF\",\n        \"word_color\": \"#FFFF00\",\n        \"outline_color\": \"#000000\",\n        \"outline_width\": 3,\n        \"all_caps\": false,\n        \"max_words_per_line\": 3,\n        \"position\": \"middle_center\",\n        \"alignment\": \"center\",\n        \"font_family\": \"Luckiest Guy\",\n        \"font_size\": 50,\n        \"bold\": true,\n        \"spacing\": 2,\n        \"shadow_offset\": 2\n    },\n    \"language\": \"en\"\n}",
+        "jsonBody": "={\n    \"video_url\": \"http://minio:9000/story/done/{{ $('Set Paths & watermark').item.json.output_path.split(\"/\").last() }}.mp4\",\n    \"settings\": {\n        \"style\": \"word_by_word\",\n        \"line_color\": \"#FFFFFF\",\n        \"word_color\": \"#FFFF00\",\n        \"outline_color\": \"#000000\",\n        \"outline_width\": 3,\n        \"all_caps\": false,\n        \"max_words_per_line\": 3,\n        \"position\": \"middle_center\",\n        \"alignment\": \"center\",\n        \"font_family\": \"Luckiest Guy\",\n        \"font_size\": 50,\n        \"bold\": true,\n        \"spacing\": 2,\n        \"shadow_offset\": 2\n    },\n    \"language\": \"en\",\n    \"id\": \"{{ $execution.id }}\"\n}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -454,7 +425,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        3396,
+        3616,
         320
       ],
       "id": "09ebb655-515e-443d-8f06-d7f17e9b2ba4",
@@ -535,7 +506,7 @@
             {
               "id": "aa9de6d4-7de0-4a3e-8a12-21121219a3b2",
               "leftValue": "={{ $json.stdout }}",
-              "rightValue": "={{ $('Set Paths').item.json.audio_path }}.mp3",
+              "rightValue": "={{ $('Set Paths & watermark').item.json.audio_path }}.mp3",
               "operator": {
                 "type": "string",
                 "operation": "startsWith"
@@ -560,7 +531,7 @@
     },
     {
       "parameters": {
-        "command": "=ffmpeg  -hide_banner -loglevel error -y -threads 2 -i {{ $('Set Paths').item.json.audio_path }}.mp3 -filter:a \"atempo={{ $('Format Script').item.json.speed + 0.1 }}\" -acodec libmp3lame -b:a 128k  {{ $('Set Paths').item.json.audio_path }}_speedup.mp3 && ffprobe -v quiet -print_format json -show_format -show_streams {{ $('Set Paths').item.json.audio_path }}_speedup.mp3"
+        "command": "=ffmpeg  -hide_banner -loglevel error -y -threads 2 -i {{ $('Set Paths & watermark').item.json.audio_path }}.mp3 -filter:a \"atempo={{ $('Format Script').item.json.speed + 0.1 }}\" -acodec libmp3lame -b:a 128k  {{ $('Set Paths & watermark').item.json.audio_path }}_speedup.mp3 && ffprobe -v quiet -print_format json -show_format -show_streams {{ $('Set Paths & watermark').item.json.audio_path }}_speedup.mp3"
       },
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
@@ -1211,6 +1182,67 @@
           "name": "Google Sheets account"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ncatoolkit:8080/v1/ffmpeg/compose",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"inputs\": [\n    {\n      \"file_url\": \"{{ $json.response }}\"\n    }\n  ],\n  \"filters\": [\n    {\n      \"filter\": \"drawtext=text='{{ $('Set Paths & watermark').item.json.watermark }}':fontfile='/files/fonts/Poppins.ttf':fontsize=32:fontcolor=white@0.65:shadowcolor=black@0.50:shadowx=2:shadowy=2:x=(w-text_w)/2:y=h-text_h-120\"\n    }\n  ],\n  \"outputs\": [\n    {\n      \"options\": [\n        { \"option\": \"-c:v\", \"argument\": \"libx264\" },\n        { \"option\": \"-preset\", \"argument\": \"veryfast\" },\n        { \"option\": \"-crf\", \"argument\": 22 },\n        { \"option\": \"-pix_fmt\", \"argument\": \"yuv420p\" },\n        { \"option\": \"-c:a\", \"argument\": \"copy\" },\n        { \"option\": \"-movflags\", \"argument\": \"+faststart\" }\n      ]\n    }\n  ],\n  \"global_options\": [\n    { \"option\": \"-y\" }\n  ],\n  \"metadata\": {\n    \"thumbnail\": true,\n    \"filesize\": true,\n    \"duration\": true\n  },\n  \"id\": {{ $execution.id }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3396,
+        320
+      ],
+      "id": "38b87ee2-c90b-4064-b83f-cf366f3e18ae",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "IlnsdYzRW7DJjqjP",
+          "name": "NCA Toolkit"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "52e75e46-d84f-4f11-9490-1170dba3cc20",
+              "name": "audio_path",
+              "value": "=/files/processed_audio/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
+              "type": "string"
+            },
+            {
+              "id": "214a34a9-4a3d-48fd-8bc5-df3bf5ad28cf",
+              "name": "output_path",
+              "value": "=/files/output_videos/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
+              "type": "string"
+            },
+            {
+              "id": "f548d938-ffbc-40ba-ac70-a255fce7a6a5",
+              "name": "watermark",
+              "value": "Pov Player 69",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        976,
+        420
+      ],
+      "id": "29b5a90b-b4b7-447b-895f-c2570870c767",
+      "name": "Set Paths & watermark"
     }
   ],
   "connections": {
@@ -1262,7 +1294,7 @@
       "main": [
         [
           {
-            "node": "Set Paths",
+            "node": "Set Paths & watermark",
             "type": "main",
             "index": 0
           }
@@ -1274,17 +1306,6 @@
         [
           {
             "node": "If",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Paths": {
-      "main": [
-        [
-          {
-            "node": "Format Command",
             "type": "main",
             "index": 0
           }
@@ -1339,7 +1360,7 @@
       "main": [
         [
           {
-            "node": "Update Prompt Status",
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
@@ -1562,6 +1583,28 @@
         [
           {
             "node": "Update FB Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Update Prompt Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Paths & watermark": {
+      "main": [
+        [
+          {
+            "node": "Format Command",
             "type": "main",
             "index": 0
           }
