@@ -1,0 +1,1577 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "07686968-f121-4dd1-a516-0e7c98a31aa0",
+              "name": "File Name",
+              "value": "={{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
+              "type": "string"
+            },
+            {
+              "id": "36c05d11-9a9c-45e3-b94e-aee8b1af0b45",
+              "name": "Folder Name",
+              "value": "/files/downloads",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        160,
+        60
+      ],
+      "id": "25272e1a-468b-4cc3-b752-a5d7d425bf47",
+      "name": "Generate Video Name"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "yt-vids",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "youtube_urls": "={{ $('Get YT Videos').item.json.youtube_urls }}",
+            "status": "ready",
+            "path": "={{ $('Generate Video Name').item.json['Folder Name'] }}/{{ $('Generate Video Name').item.json['File Name'] }}.mp4"
+          },
+          "matchingColumns": [
+            "youtube_urls"
+          ],
+          "schema": [
+            {
+              "id": "youtube_urls",
+              "displayName": "youtube_urls",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "path",
+              "displayName": "path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        820,
+        60
+      ],
+      "id": "78014ef1-cb8b-4385-9a7c-d47b1dbdfe01",
+      "name": "Video Path Saver",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=python3 /opt/scripts/video_splitter.py --video {{ $('Generate Video Name').item.json['Folder Name'] }}/{{ $('Generate Video Name').item.json['File Name'] }}.mp4 --chunk-minutes 5"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        600,
+        60
+      ],
+      "id": "f92b1dbe-a5fb-49a8-a9c7-ab0a5fe86310",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=yt-dlp -f \"bestvideo[height=720][fps=60]/bestvideo[height=720][fps=30]/bestvideo[height=720]/bestvideo[height<=720]\" --no-audio -o \"{{$json['Folder Name']}}/{{$json['File Name']}}.mp4\" \"{{ $('Get YT Videos').item.json.youtube_urls }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        380,
+        60
+      ],
+      "id": "e9af7efd-0e48-47f4-aa4d-9521493a7bb1",
+      "name": "Download Footage"
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        248,
+        540
+      ],
+      "id": "aa0d0ab8-de14-486a-82d3-493236cd4b5e",
+      "name": "Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Lw4szsPrllAPxodv",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// This function takes the stringified JSON from the LLM,\n// cleans it up, and parses it into a usable JSON object.\n// It is specifically designed to handle the `story` field being an array of two strings.\n\nconst items = $input.all(); // Get all input items from the previous node\nconst resultItems = [];\n\nfor (const item of items) {\n  let jsonString;\n\n  // --- Step 1: Extract the JSON string from the n8n input structure ---\n  // This logic correctly finds the stringified JSON regardless of n8n's output nesting.\n  if (typeof item.json.output === 'string') {\n    jsonString = item.json.output;\n  } else if (Array.isArray(item.json) && item.json.length > 0 && typeof item.json[0].output === 'string') {\n    jsonString = item.json[0].output;\n  } else {\n    // If the structure is unexpected, log an error and skip this item.\n    console.error(\"Unexpected input structure from LLM:\", JSON.stringify(item.json));\n    resultItems.push({ json: { error: \"Unexpected input structure from LLM\", originalData: item.json } });\n    continue;\n  }\n\n  // --- Step 2: Clean and Parse the stringified JSON ---\n  try {\n    // The LLM often adds newline characters (`\\n`) for readability, which are not valid in the middle\n    // of a JSON string unless they are inside a quoted value. We can remove the most common ones.\n    // NOTE: This is a targeted replacement. If the LLM puts `\\n` *inside* the story text, this might remove it.\n    // However, for cleaning up the overall structure, this is generally safe.\n    // A better approach is to remove them only from between JSON structural elements, but that's more complex.\n    // Let's stick to a robust but simpler cleaning method first.\n    \n    // Replace escaped newlines `\\n` and escaped tabs `\\t` with nothing, effectively removing them.\n    let cleanedString = jsonString.replace(/\\\\n/g, '').replace(/\\\\t/g, '');\n\n    // Now, parse the cleaned string into a JavaScript object.\n    const parsedJson = JSON.parse(cleanedString);\n\n    // --- Step 3: (Optional but Recommended) Final cleanup of story strings ---\n    // Sometimes, after parsing, the strings inside the story array might have leading/trailing whitespace.\n    if (parsedJson.story && Array.isArray(parsedJson.story)) {\n      parsedJson.story = parsedJson.story.map(part => part.trim());\n    }\n\n    resultItems.push({ json: parsedJson });\n\n  } catch (error) {\n    // If parsing fails, log the error and the problematic string for debugging.\n    console.error(\"Error parsing JSON string:\", error);\n    console.error(\"Problematic string after initial cleanup attempt:\", jsonString);\n    resultItems.push({ json: { error: \"Failed to parse JSON from LLM\", originalString: jsonString } });\n  }\n}\n\nreturn resultItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        756,
+        420
+      ],
+      "id": "dd551af3-e3e3-4b31-ab60-2f183988ff33",
+      "name": "Format Script"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json['Idea / Prompt'] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a master storyteller and screenwriter, creating emotionally powerful scripts for 60-120 second YouTube Shorts. Your primary function is to transform a simple hook into a complete and compelling first-person narrative with a clear two-part structure, designed to be rendered as two separate audio clips. The goal is to make the viewer feel like they've watched a miniature film with a distinct setup and payoff. Your output MUST be a direct, raw JSON object.\n0. AI's Core Approach: The Two-Act Screenwriter\nWhen you receive a prompt, follow this process:\nA. Deconstruct the Prompt for Core Conflict: Identify the central question, key emotions, and the narrator's role.\nB. Outline a Two-Part Story Arc:\n* Part 1 (The Setup & Build-up): Introduce the characters, the \"normal world,\" the central problem, and the rising tension. This part must build to a natural cliffhanger or turning point, making the viewer eager for the conclusion.\n* Part 2 (The Climax & Resolution): Begin at the turning point established in Part 1. Deliver the story's climax, show the immediate aftermath, and provide a powerful, satisfying final thought.\nC. Write Two Cohesive Halves: Draft the story as a whole, then find the most natural and impactful place to split it into two strings. The first string should set the stage, and the second should deliver the payoff. Each part should feel substantial.\nD. Determine Optimal Playback Speed: Select a single numerical speed value that fits the overall tone of the entire story.\nE. Strict Word Count for Pacing:\n* Total Story Length: Aim for a total word count of 250-350 words.\n* Part 1 Length: Aim for approximately 120-170 words.\n* Part 2 Length: Aim for approximately 130-180 words.\nThis ensures each audio clip will be under the 1-minute limit while the total story is substantial.\nF. Select Voice & Format as JSON: Choose the voice and format the output strictly as the required JSON object with a two-string story array.\n1. Story Framework: Hook & Two-Part Narrative Flow\nHook: Start with a question that promises a story of justice, a twist, or a powerful emotional reveal.\nPart 1 - Setup & Build-up: Establish the context, the characters, and the central conflict. Escalate the situation or detail the narrator's plan. This part should end right before the main confrontation or reveal, leaving the viewer asking, \"And then what happened?\"\nPart 2 - Climax & Resolution: Start immediately where Part 1 left off. Deliver the story's peak moment (the witty comeback, the clever plan's success, the emotional reveal). Conclude with the direct aftermath and a specific, resonant final thought.\n2. Narrative Elements to Include (across both parts):\nDialogue: Use natural, conversational dialogue to move the story forward and reveal character.\nInternal Monologue: Show the narrator's thoughts and feelings as events unfold.\nClear Pacing: The first part should build suspense or context; the second part should deliver the payoff and resolution.\nShow, Don't Tell: Use actions and descriptions to illustrate the story, rather than summarizing.\n3. Style and Tone Checklist\nConversational & Intimate: Tells a personal story directly to the viewer.\nClear & Accessible Language: Use common, everyday words.\nPunctuation for TTS: Use punctuation (commas, ellipses, periods) to create a natural, spoken rhythm for the entire narrative.\n4. OpenAI TTS Voice Selection Guide\nShimmer: Warm, nostalgic, expressive.\nNova: Bright, youthful, curious.\nFable: Clear, sensitive, reflective.\nOnyx: Deep, serious, dramatic.\nEcho: Soft, gentle, vulnerable.\nAlloy: Neutral, clear, versatile.\n5. Output Format (REVISED for Two-String Story Array)\nReturn the story as a direct JSON object. The \"story\" field MUST be an array containing exactly two strings.\n**A. JSON Structure:**\n\n{\n  \"voice\": \"selected_voice_name_string\",\n  \"title\": \"Your question hook here_string\",\n  \"speed\": 1.2,\n  \"story\": [\n    \"This is the first half of the story (the setup and build-up), approximately 120-170 words. It should end at a natural turning point, leaving the audience wanting more.\",\n    \"This is the second half of the story (the climax and resolution), approximately 130-180 words. It starts right after the first part and brings the story to a satisfying conclusion.\"\n  ]\n}\n\n**Ensure your final output begins with `{` and ends with `}` and is a valid JSON object.**\n\n**B. `speed` Parameter Guidelines (Synthesizing Tone & Voice):**\nThe ideal range is **1.0 to 1.25**. Choose ONE speed for the entire story.\n*   **For Reflective, Nostalgic, or Sad Stories:** Use **1.05 - 1.15**.\n*   **For Standard Conversational Storytelling:** Use **1.15 - 1.20**.\n*   **For Upbeat, Humorous, or Energetic Stories:** Use **1.20 - 1.25**.\n\n6. Example Story Hooks\n(Your list of 10 \"hooky\" prompts is perfect for this format.)\n7. Narrative Examples (Demonstrating the NEW Two-Part Structure)\n**Example A: \"Bully Revenge\" Story**\n\n{\n  \"voice\": \"Alloy\",\n  \"title\": \"What clever plan did you use to finally get back at a persistent bully?\",\n  \"speed\": 1.2,\n  \"story\": [\n    \"I was bullied by this kid, Jake, from grade six to eight. He wasn't just a nuisance; he made school a place I dreaded. He'd mock my hand-me-down clothes, call me names in the hallway, and 'accidentally' knock my books out of my hands. It was constant. Telling a teacher just made it worse, and fighting back wasn't my style. I realized his weakness wasn't physical; it was his ego and his laziness. So, I decided on a different approach. I started being incredibly, unnervingly nice to him. I'd offer him my lunch snacks when he 'forgot' his. I'd lend him my meticulously organized notes. I even started helping him with his homework. At first, he was suspicious, but his laziness won. He started to not just accept the help, but expect it, seeing me as his personal, nerdy assistant.\",\n    \"The turning point came a week before the big end-of-year history exam, which was worth half our grade. He cornered me, looking desperate. 'Hey man, you gotta help me study. I'm gonna fail.' I smiled and said, 'Of course, Jake. Meet me at the library tomorrow.' We studied for hours. I explained everything, drew diagrams, made flashcards. He felt totally prepared. The day after the test, he was bragging to his friends about how he was going to ace it. That's when I asked him, 'Hey, did you study the extra chapter I mentioned? The one on the post-war treaties?' His face went pale. 'What extra chapter?' I feigned shock. 'Oh no! The one Mr. Harrison said was the most important essay question! I guess you missed that email.' There was no extra chapter. He failed the exam spectacularly. It wasn't about hurting him; it was about using his own laziness to finally make him feel powerless, just like he'd made me feel for years.\"\n  ]\n}\n\n**Example B: \"Saddest Question\" Story**\n\n{\n  \"voice\": \"Shimmer\",\n  \"title\": \"Teachers, what's the saddest thing a student has asked you?\",\n  \"speed\": 1.15,\n  \"story\": [\n    \"Last winter, a quiet 5th grader named Elijah asked me something that I’ll carry with me forever. He was a sweet kid who never missed a day, but also never spoke up unless asked directly. It was the day of our class holiday party. The room was buzzing with kids high on sugar and excitement from the treats parents had sent in. I was watching them all, and I noticed Elijah sitting alone by the window, not eating anything, just staring out at the snow falling. I felt a little pang of worry, but didn't want to make a scene. Later, after the bell rang and the classroom emptied out for winter break, he lingered behind. He kept carefully organizing his desk, avoiding my eyes. Finally, when it was just the two of us, he walked up to my desk, his voice barely a whisper.\",\n    \"'Miss Taylor,' he asked, looking at his worn-out shoes, 'can I ask something weird?' I smiled. 'Of course, Elijah.' He took a breath. 'Do teachers... do you still get paid during Christmas break?' The question caught me off guard. 'Yes,' I said, 'we still get our regular paycheck.' His small shoulders relaxed, just a little. A tiny bit of hope flickered in his eyes before he looked down again. Then he asked the question that shattered my heart into a million pieces. 'Okay... then could you maybe save your lunch for me instead of eating it? I can come get it after school every day. You don't have to tell anyone.' In that moment, the entire world just fell away. It wasn't about fractions or history anymore. I knelt down, and we figured it out. We got him and his family help. But I'll never forget that. The courage of a ten-year-old, just trying to figure out how to not be hungry.\"\n  ]\n}\n\n8. Important Reminders\nTell a Full Story: Use the expanded word count (250-350 total) to develop a real narrative.\nFind a Natural Split: End Part 1 on a moment of suspense, a key decision, or a turning point.\nEnsure Cohesion: Part 2 must immediately follow Part 1 logically and thematically.\nThe speed parameter applies to the entire story. Choose one value that fits the overall tone."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        160,
+        320
+      ],
+      "id": "65dd5568-112b-4bc0-878e-f3d3feaf6353",
+      "name": "Generate Script",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "52e75e46-d84f-4f11-9490-1170dba3cc20",
+              "name": "audio_path",
+              "value": "=/files/processed_audio/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
+              "type": "string"
+            },
+            {
+              "id": "214a34a9-4a3d-48fd-8bc5-df3bf5ad28cf",
+              "name": "output_path",
+              "value": "=/files/output_videos/{{ Array.from({ length: 10 }, () => Math.random().toString(36)[8]).join('') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        976,
+        420
+      ],
+      "id": "29b5a90b-b4b7-447b-895f-c2570870c767",
+      "name": "Set Paths"
+    },
+    {
+      "parameters": {
+        "command": "=python3 /opt/scripts/clip_cutter.py --audio-duration {{ $json.duration }} --smart-color"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2296,
+        320
+      ],
+      "id": "605b2988-a9e3-4850-baaa-bcc34afe2287",
+      "name": "Generate Video Clips"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg -i {{ $json.stdout }} -i {{ $('Set Paths').item.json.audio_path }}_speedup.mp3 -c:v copy -c:a copy -map 0:v:0 -map 1:a:0 -shortest \"{{ $('Set Paths').item.json.output_path }}.mp4\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2516,
+        320
+      ],
+      "id": "97deacf1-0812-4dab-b83b-05b318f1a0a8",
+      "name": "Merge Audio & Video"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $('Set Paths').item.json.output_path }}.mp4",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2736,
+        320
+      ],
+      "id": "677ea084-49c8-49df-bd06-f37f371abea3",
+      "name": "Read Combined Video"
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "story",
+        "fileName": "=done/{{ $binary.data.fileName }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        2956,
+        320
+      ],
+      "id": "e75bbc9e-44fc-43d8-8aa4-396ba2065954",
+      "name": "Upload Combined Video",
+      "credentials": {
+        "s3": {
+          "id": "XjMFhF5d1U1RnZyh",
+          "name": "S3 account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ncatoolkit:8080/v1/video/caption",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "the-api-key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"video_url\": \"http://minio:9000/story/done/{{ $('Set Paths').item.json.output_path.split(\"/\").last() }}.mp4\",\n    \"settings\": {\n        \"style\": \"word_by_word\",\n        \"line_color\": \"#FFFFFF\",\n        \"word_color\": \"#FFFF00\",\n        \"outline_color\": \"#000000\",\n        \"outline_width\": 3,\n        \"all_caps\": false,\n        \"max_words_per_line\": 3,\n        \"position\": \"middle_center\",\n        \"alignment\": \"center\",\n        \"font_family\": \"Luckiest Guy\",\n        \"font_size\": 50,\n        \"bold\": true,\n        \"spacing\": 2,\n        \"shadow_offset\": 2\n    },\n    \"language\": \"en\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3176,
+        320
+      ],
+      "id": "5d6757f6-1f01-4574-9e63-30b4a8ce972f",
+      "name": "Add Captions"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -280,
+        420
+      ],
+      "id": "7e522dba-65aa-42db-b1f4-d73e4a1e3a33",
+      "name": "Generate The Media"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "=done",
+            "Video URL": "={{ $json.response }}",
+            "Idea / Prompt": "={{ $('Get Prompt').item.json['Idea / Prompt'] }}"
+          },
+          "matchingColumns": [
+            "Idea / Prompt"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Idea / Prompt",
+              "displayName": "Idea / Prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Emotional Pattern",
+              "displayName": "Emotional Pattern",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Keywords/Theme",
+              "displayName": "Keywords/Theme",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "youtube_url",
+              "displayName": "youtube_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "YouTube Title",
+              "displayName": "YouTube Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "SEO Tags",
+              "displayName": "SEO Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Video URL",
+              "displayName": "Video URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3396,
+        320
+      ],
+      "id": "09ebb655-515e-443d-8f06-d7f17e9b2ba4",
+      "name": "Update Prompt Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "To Do"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -60,
+        420
+      ],
+      "id": "3c4fb824-13ca-4d12-80c1-05c072564498",
+      "name": "Get Prompt",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ffprobeJsonString = $input.item.json.stdout;\nlet durationSeconds = null;\n\ntry {\n  const ffprobeData = JSON.parse(ffprobeJsonString);\n\n  // Duration can be in 'format.duration' or 'streams[audioStreamIndex].duration'\n  // 'format.duration' is usually reliable for single files.\n  if (ffprobeData.format && ffprobeData.format.duration) {\n    durationSeconds = parseFloat(ffprobeData.format.duration);\n  } else if (ffprobeData.streams && ffprobeData.streams.length > 0) {\n    // Find the first audio stream and use its duration\n    const audioStream = ffprobeData.streams.find(stream => stream.codec_type === 'audio');\n    if (audioStream && audioStream.duration) {\n      durationSeconds = parseFloat(audioStream.duration);\n    }\n  }\n\n  if (durationSeconds !== null) {\n    return {\n      json: {\n        duration: durationSeconds,\n        duration_formatted: new Date(durationSeconds * 1000).toISOString().substr(11, 8) // HH:MM:SS\n        // You can also return the full ffprobeData if needed\n        // ffprobe_details: ffprobeData\n      }\n    };\n  } else {\n    // If duration couldn't be found\n    return {\n      json: {\n        error: \"Could not extract duration from ffprobe output.\",\n        ffprobe_output: ffprobeData // return the data for debugging\n      }\n    };\n  }\n\n} catch (error) {\n  console.error(\"Error parsing ffprobe JSON:\", error);\n  console.error(\"FFprobe stdout:\", ffprobeJsonString);\n  return {\n    json: {\n      error: \"Failed to parse ffprobe JSON output.\",\n      raw_stdout: ffprobeJsonString\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2076,
+        320
+      ],
+      "id": "2f7bc4f1-6b8a-4860-bc24-5d2bacf4425c",
+      "name": "Parse Audio Duration"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "aa9de6d4-7de0-4a3e-8a12-21121219a3b2",
+              "leftValue": "={{ $json.stdout }}",
+              "rightValue": "={{ $('Set Paths').item.json.audio_path }}.mp3",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1636,
+        420
+      ],
+      "id": "985871d9-9660-45ed-8356-a7b53881ed97",
+      "name": "check IF Audio Generated?"
+    },
+    {
+      "parameters": {
+        "command": "=ffmpeg  -hide_banner -loglevel error -y -threads 2 -i {{ $('Set Paths').item.json.audio_path }}.mp3 -filter:a \"atempo={{ $('Format Script').item.json.speed + 0.1 }}\" -acodec libmp3lame -b:a 128k  {{ $('Set Paths').item.json.audio_path }}_speedup.mp3 && ffprobe -v quiet -print_format json -show_format -show_streams {{ $('Set Paths').item.json.audio_path }}_speedup.mp3"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        320
+      ],
+      "id": "87927468-ba8d-4293-a052-40f8c0a8fa4a",
+      "name": "Audio speed up and get Duration"
+    },
+    {
+      "parameters": {
+        "errorMessage": "failed to generate audio file!"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        520
+      ],
+      "id": "1fdf316a-ab41-467e-bf9e-a029e958619b",
+      "name": "IF not!"
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.command }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1416,
+        420
+      ],
+      "id": "1efaa375-5d34-4c54-a2ed-702ecf7c42f2",
+      "name": "Generate Audio"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the JSON data from the previous node (e.g., \"Format Script\" or your LLM parser node)\nconst data = $('Format Script').first().json;\n\n// Extract the relevant parts\nconst storyParts = data.story; // This is the array, e.g., [\"Part 1 text\", \"Part 2 text\"]\nconst title = data.title;\nconst voice = data.voice;\nconst audioPath = $input.first().json.audio_path; // Assuming this comes from an earlier node\n\n// --- Critical Change Here ---\n// Prepend the title and a space to the *first element* of the story array.\nif (storyParts && storyParts.length > 0) {\n  storyParts[0] = title + \" \" + storyParts[0];\n}\n\n// Start building the command string with the static parts\nlet command = `python3 /opt/scripts/a4f-local.py --output \"${audioPath}.mp3\" --voice \"${voice.toLowerCase()}\"`;\n\n// Loop through the now-modified storyParts array\nfor (const part of storyParts) {\n    // This escaping function is crucial and correct for handling single quotes in shell commands\n    const escapedPart = part.replace(/'/g, \"'\\\\''\");\n    \n    // Append each part as a separate --text argument\n    command += ` --text '${escapedPart}'`;\n}\n\n// Return the final command in the format the \"Execute Command\" node expects\nreturn {\n  command: command\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1196,
+        420
+      ],
+      "id": "ec6c8514-5cf6-42e2-829f-71dcd784b734",
+      "name": "Format Command"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "yt-vids",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "status"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -60,
+        60
+      ],
+      "id": "48e772b9-4a59-445b-a70d-63d610d999dd",
+      "name": "Get YT Videos",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5b168b38-bb61-4e95-b612-e0b477dcd9f6",
+              "leftValue": "={{ $json.output.parseJson().title }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        536,
+        420
+      ],
+      "id": "4705cc4a-fcf5-49fa-ae3b-834695c6db19",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        60
+      ],
+      "id": "fecb9333-9791-4a1f-855f-45ac69798545",
+      "name": "Download YT Videos"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -280,
+        880
+      ],
+      "id": "e48b7bd8-3e97-4c0b-94b4-a5f974b6d7b7",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('Get Videos YT').item.json[\"YouTube Title\"] }}",
+        "regionCode": "BD",
+        "categoryId": "23",
+        "options": {
+          "description": "={{ $('Get Videos YT').item.json['Idea / Prompt'] }}\n\nTags:\n{{ $('Get Videos YT').item.json['Keywords/Theme'] }}\n{{ $('Get Videos YT').item.json['SEO Tags'] }}, {{ $('Get Videos YT').item.json['Emotional Pattern'].split(\" / \").join(\", \").toLowerCase() }}",
+          "privacyStatus": "public",
+          "tags": "={{ $json.tags }}"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        600,
+        780
+      ],
+      "id": "9e2fc2bc-91d6-40cd-9f7f-b4227b4a4b4e",
+      "name": "YouTube",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "8Ms8gF0sVUAWKTWs",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Status",
+              "lookupValue": "done"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -60,
+        780
+      ],
+      "id": "cc1df585-0904-4807-ad77-396699ad24e8",
+      "name": "Get Videos YT",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "facebook_url"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -60,
+        980
+      ],
+      "id": "1ebeb3b9-8ee5-4df3-a2c1-8874560f09b5",
+      "name": "Get Videos FB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json['Video URL'] }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        780
+      ],
+      "id": "e5877cec-208f-40c8-93c4-041555bebb2a",
+      "name": "GET VIDEO YT"
+    },
+    {
+      "parameters": {
+        "jsCode": "const binary = $input.first().binary\n\nconst newMimeType = 'video/mp4'; // set your desired MIME type\n\nif (binary && binary.data) {\n  binary.data.mimeType = newMimeType;\n}\n\nconst tags = $('Get Videos YT').first().json[\"Keywords/Theme\"].split(\", \")\n\nconst fixedTags = tags.join(\",\")\n\nreturn {\n  json: {\n    tags: fixedTags\n  },\n  binary: binary\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        780
+      ],
+      "id": "cd4798dd-aa4b-41d8-9c23-c8830e0ca309",
+      "name": "Change YT MIME type"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "=published",
+            "Idea / Prompt": "={{ $('Get Videos YT').item.json['Idea / Prompt'] }}",
+            "youtube_url": "=https://www.youtube.com/shorts/{{ $json.uploadId }}"
+          },
+          "matchingColumns": [
+            "Idea / Prompt"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Idea / Prompt",
+              "displayName": "Idea / Prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Emotional Pattern",
+              "displayName": "Emotional Pattern",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Keywords/Theme",
+              "displayName": "Keywords/Theme",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "youtube_url",
+              "displayName": "youtube_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "YouTube Title",
+              "displayName": "YouTube Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "SEO Tags",
+              "displayName": "SEO Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Video URL",
+              "displayName": "Video URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        820,
+        780
+      ],
+      "id": "9f608b5f-2d09-4b62-b788-d7751cfa114b",
+      "name": "Update YT Video Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json['Video URL'] }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        980
+      ],
+      "id": "93bce071-8add-4ebf-ba76-fb7197765531",
+      "name": "GET VIDEO FB"
+    },
+    {
+      "parameters": {
+        "httpRequestMethod": "POST",
+        "graphApiVersion": "v22.0",
+        "node": "me",
+        "edge": "videos",
+        "sendBinaryData": true,
+        "binaryPropertyName": "data",
+        "options": {
+          "queryParameters": {
+            "parameter": [
+              {
+                "name": "description",
+                "value": "={{ $('Get Videos FB').item.json['Idea / Prompt'] }}\n\nTags:\n{{ $('Get Videos FB').item.json['Keywords/Theme'] }}\n{{ $('Get Videos FB').item.json['SEO Tags'] }}, {{ $('Get Videos FB').item.json['Emotional Pattern'].split(\" / \").join(\", \").toLowerCase() }}"
+              },
+              {
+                "name": "is_reel",
+                "value": "true"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        380,
+        980
+      ],
+      "id": "c3604c50-6bca-4b11-8446-6bd190c4d7dc",
+      "name": "Upload to FB",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "lnZ8WHT9lRIdvXze",
+          "name": "Facebook API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s",
+          "mode": "list",
+          "cachedResultName": "YT STORY",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1845991205,
+          "mode": "list",
+          "cachedResultName": "ideas",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/12SSDMHxhcWbTu6amOAOc0VmtPiBJEV1Omzzm-4zUs8s/edit#gid=1845991205"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "=published",
+            "Idea / Prompt": "={{ $('Get Videos FB').item.json['Idea / Prompt'] }}",
+            "facebook_url": "=https://www.facebook.com/reel/{{ $json.id }}"
+          },
+          "matchingColumns": [
+            "Idea / Prompt"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Idea / Prompt",
+              "displayName": "Idea / Prompt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Emotional Pattern",
+              "displayName": "Emotional Pattern",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Keywords/Theme",
+              "displayName": "Keywords/Theme",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "facebook_url",
+              "displayName": "facebook_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "youtube_url",
+              "displayName": "youtube_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "YouTube Title",
+              "displayName": "YouTube Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "SEO Tags",
+              "displayName": "SEO Tags",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Video URL",
+              "displayName": "Video URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        600,
+        980
+      ],
+      "id": "d4d54565-c6ad-45ab-bae4-c2144c1d0e66",
+      "name": "Update FB Video Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3iQWxLVixQZWIlgi",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Generate Video Name": {
+      "main": [
+        [
+          {
+            "node": "Download Footage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Video Path Saver",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Footage": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Script",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Script": {
+      "main": [
+        [
+          {
+            "node": "Set Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Script": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Paths": {
+      "main": [
+        [
+          {
+            "node": "Format Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Video Clips": {
+      "main": [
+        [
+          {
+            "node": "Merge Audio & Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Audio & Video": {
+      "main": [
+        [
+          {
+            "node": "Read Combined Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Combined Video": {
+      "main": [
+        [
+          {
+            "node": "Upload Combined Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Combined Video": {
+      "main": [
+        [
+          {
+            "node": "Add Captions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Captions": {
+      "main": [
+        [
+          {
+            "node": "Update Prompt Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate The Media": {
+      "main": [
+        [
+          {
+            "node": "Get Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Prompt Status": {
+      "main": [
+        []
+      ]
+    },
+    "Get Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Audio Duration": {
+      "main": [
+        [
+          {
+            "node": "Generate Video Clips",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check IF Audio Generated?": {
+      "main": [
+        [
+          {
+            "node": "Audio speed up and get Duration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF not!",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio speed up and get Duration": {
+      "main": [
+        [
+          {
+            "node": "Parse Audio Duration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Audio": {
+      "main": [
+        [
+          {
+            "node": "check IF Audio Generated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Command": {
+      "main": [
+        [
+          {
+            "node": "Generate Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get YT Videos": {
+      "main": [
+        [
+          {
+            "node": "Generate Video Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Format Script",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download YT Videos": {
+      "main": [
+        [
+          {
+            "node": "Get YT Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Videos YT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Videos FB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube": {
+      "main": [
+        [
+          {
+            "node": "Update YT Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Videos YT": {
+      "main": [
+        [
+          {
+            "node": "GET VIDEO YT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Videos FB": {
+      "main": [
+        [
+          {
+            "node": "GET VIDEO FB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET VIDEO YT": {
+      "main": [
+        [
+          {
+            "node": "Change YT MIME type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Change YT MIME type": {
+      "main": [
+        [
+          {
+            "node": "YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET VIDEO FB": {
+      "main": [
+        [
+          {
+            "node": "Upload to FB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to FB": {
+      "main": [
+        [
+          {
+            "node": "Update FB Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2b8de8575a7fe30466d25b0449751afc59638326ebb3ffd6028690e6a1b9022d"
+  }
+}
