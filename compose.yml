@@ -1,0 +1,103 @@
+services:
+  workflows:
+    container_name: "workflows"
+    hostname: workflows
+    build:
+      context: . # Path to the directory containing n8n.Dockerfile
+      dockerfile: n8n.Dockerfile # Name of your Dockerfile
+    restart: unless-stopped
+    environment:
+      # Service config
+      TZ: ${TZ}
+      N8N_SECURE_COOKIE: false
+      N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE: true
+      N8N_EDITOR_BASE_URL: ${EXTERNAL_IP}
+      WEBHOOK_URL: ${EXTERNAL_IP}
+      GENERIC_TIMEZONE: ${TZ}
+      DB_TYPE: sqlite
+      PYTHONUNBUFFERED: 1 # Useful for seeing Python print statements immediately in logs
+      N8N_BINARY_DATA_MODE: "filesystem" # Store binary files on disk instead of database
+      N8N_RUNNERS_ENABLED: "true" # Enable task runners as recommended
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    ports:
+      - "80:5678"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G # Increased memory for video processing
+    labels:
+      com.docker.compose.service: "n8n Workflows"
+      com.docker.compose.description: "Workflow automation tool"
+
+  minio:
+    container_name: "minio"
+    hostname: minio
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app-network
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      com.docker.compose.service: "MinIO S3"
+      com.docker.compose.description: "S3-compatible object storage"
+
+  ncatoolkit:
+    container_name: "ncatoolkit"
+    hostname: ncatoolkit
+    image: stephengpope/no-code-architects-toolkit:latest
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      API_KEY: the-api-key
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: admin
+      S3_SECRET_KEY: password123
+      S3_BUCKET_NAME: nca-toolkit
+      S3_REGION: us-east-1
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    labels:
+      com.docker.compose.service: "NCA Toolkit"
+      com.docker.compose.description: "No-Code Architects Toolkit"
+
+networks:
+  app-network:
+    driver: bridge
+    name: app-network
+    external: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  # baserow_data:
+  #   name: baserow_data
+  #   external: true
+  n8n_data:
+    name: n8n_data
+    external: true
+  minio_data:
+    name: minio_data
+    external: true
