@@ -12,7 +12,7 @@ services:
       N8N_SECURE_COOKIE: false
       N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE: true
       N8N_EDITOR_BASE_URL: ${EXTERNAL_IP}
-      WEBHOOK_URL: ${EXTERNAL_IP}
+      WEBHOOK_URL: http://${EXTERNAL_IP}/
       GENERIC_TIMEZONE: ${TZ}
       DB_TYPE: sqlite
       PYTHONUNBUFFERED: 1 # Useful for seeing Python print statements immediately in logs
@@ -20,7 +20,7 @@ services:
       N8N_RUNNERS_ENABLED: "true" # Enable task runners as recommended
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
     ports:
-      - "5678:5678"
+      - "80:80"
     volumes:
       - ./@n8n-files:/files
     networks:
@@ -91,7 +91,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.28.0.0/16
+        - subnet: ${EXTERNAL_IP}/16
 
 volumes:
   n8n_data:
