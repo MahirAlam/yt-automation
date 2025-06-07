@@ -20,7 +20,9 @@ services:
       N8N_RUNNERS_ENABLED: "true" # Enable task runners as recommended
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
     ports:
-      - "80:5678"
+      - "5678:5678"
+    volumes:
+      - ./@n8n-files:/files
     networks:
       - app-network
     deploy:
@@ -44,7 +46,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      - ./minio-data:/data
     networks:
       - app-network
     command: server /data --console-address ":9001"
